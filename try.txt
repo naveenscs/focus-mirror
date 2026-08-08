@@ -7,4 +7,5 @@ asgf
   <title>Focus Mirror — Ambient Generative Focus Canvas</title>
 
    <!-- MediaPipe Pose & Camera Utils via CDN -->
+  <style>
 
