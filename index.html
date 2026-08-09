@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Focus Mirror & Ergonomic Posture AI</title>
+  <title>Focus Mirror & Smart Posture Tracker</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
@@ -12,20 +12,24 @@
 
   <style>
     .glow-good { box-shadow: 0 0 25px rgba(34, 197, 94, 0.35); border-color: #22c55e !important; }
-    .glow-warning { box-shadow: 0 0 25px rgba(234, 179, 8, 0.4); border-color: #eab308 !important; }
     .glow-bad { box-shadow: 0 0 25px rgba(239, 68, 68, 0.45); border-color: #ef4444 !important; }
     #output_canvas, #webcam { transform: scaleX(-1); }
+    @keyframes pulse-fast {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.85; transform: scale(1.02); }
+    }
+    .animate-alert { animation: pulse-fast 1s infinite; }
   </style>
 </head>
 
-<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col items-center p-4 md:p-8 font-sans">
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col items-center p-4 md:p-6 font-sans">
 
-  <header class="text-center max-w-2xl mb-6">
-    <h1 class="text-3xl font-extrabold text-indigo-400 tracking-tight sm:text-4xl">Focus Mirror & Ergonomic AI</h1>
-    <p class="text-slate-400 text-sm mt-2">OSHA / ISO 9241-5 Angle Tracking & Floating Background Overlay</p>
+  <header class="text-center max-w-2xl mb-4">
+    <h1 class="text-3xl font-extrabold text-indigo-400 tracking-tight sm:text-4xl">Focus Mirror & Posture AI</h1>
+    <p class="text-slate-400 text-sm mt-1">Lightweight AI Tracker with Background Alerts & Visual Guidance</p>
   </header>
 
-  <main class="w-full max-w-4xl flex flex-col items-center gap-6">
+  <main class="w-full max-w-5xl flex flex-col items-center gap-6">
 
     <!-- Status Bar Badges -->
     <div class="w-full flex flex-wrap justify-center items-center gap-4">
@@ -40,52 +44,68 @@
       <div id="posture-badge" class="flex items-center gap-3 px-5 py-3 rounded-xl bg-slate-800 border border-slate-700 transition-all duration-300">
         <span id="posture-icon" class="text-2xl">🧘</span>
         <div class="flex flex-col">
-          <span class="text-xs text-slate-400 font-semibold uppercase tracking-wider">Ergonomic Posture</span>
+          <span class="text-xs text-slate-400 font-semibold uppercase tracking-wider">Posture Alignment</span>
           <span id="posture-text" class="text-base font-bold text-slate-200">Initializing...</span>
         </div>
       </div>
     </div>
 
-    <!-- Video Feed Frame -->
-    <div id="mirror-card" class="relative w-full max-w-2xl aspect-video rounded-2xl bg-slate-800 border-2 border-slate-700 overflow-hidden transition-all duration-500">
-      <video id="webcam" class="hidden" playsinline></video>
-      <canvas id="output_canvas" class="w-full h-full object-cover"></canvas>
-      <video id="pip-video" autoplay muted class="hidden"></video>
+    <!-- Main View Grid -->
+    <div class="w-full grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+      
+      <!-- Video Feed Frame -->
+      <div id="mirror-card" class="lg:col-span-2 relative aspect-video rounded-2xl bg-slate-800 border-2 border-slate-700 overflow-hidden transition-all duration-300">
+        <video id="webcam" class="hidden" playsinline></video>
+        <canvas id="output_canvas" class="w-full h-full object-cover"></canvas>
+        <video id="pip-video" autoplay muted class="hidden"></video>
 
-      <div id="loading-overlay" class="absolute inset-0 bg-slate-900/90 flex flex-col items-center justify-center gap-3 z-10">
-        <div class="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-        <p class="text-sm font-medium text-slate-300">Starting Camera & Ergonomic Models...</p>
+        <div id="loading-overlay" class="absolute inset-0 bg-slate-900/90 flex flex-col items-center justify-center gap-3 z-10">
+          <div class="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+          <p class="text-sm font-medium text-slate-300">Loading Optimized Models...</p>
+        </div>
       </div>
+
+      <!-- Live Animated Visualizer (Correct vs Current) -->
+      <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5 flex flex-col items-center text-center gap-4">
+        <h3 class="text-sm font-bold text-indigo-400 uppercase tracking-wider">Live Alignment Guide</h3>
+        
+        <div class="grid grid-cols-2 gap-4 w-full">
+          <!-- Ideal Figure -->
+          <div class="flex flex-col items-center bg-slate-900/60 p-3 rounded-xl border border-emerald-500/30">
+            <span class="text-xs font-semibold text-emerald-400 mb-2">Ideal Posture</span>
+            <svg class="w-16 h-24 stroke-emerald-400 fill-none stroke-2" viewBox="0 0 50 80">
+              <circle cx="25" cy="12" r="6" /> <!-- Head -->
+              <path d="M25 18 L25 50" /> <!-- Spine -->
+              <path d="M12 28 L38 28" /> <!-- Straight Shoulders -->
+              <circle cx="25" cy="12" r="2" class="fill-emerald-400" /> <!-- Ear point -->
+            </svg>
+            <span class="text-[10px] text-slate-400 mt-2">Spine Straight<br>Shoulders Open</span>
+          </div>
+
+          <!-- Current Live Figure Status -->
+          <div id="live-viz-card" class="flex flex-col items-center bg-slate-900/60 p-3 rounded-xl border border-slate-700">
+            <span class="text-xs font-semibold text-slate-300 mb-2">Your Position</span>
+            <svg id="live-svg" class="w-16 h-24 stroke-slate-300 fill-none stroke-2 transition-all duration-300" viewBox="0 0 50 80">
+              <circle id="svg-head" cx="25" cy="12" r="6" />
+              <path id="svg-spine" d="M25 18 L25 50" />
+              <path id="svg-shoulders" d="M12 28 L38 28" />
+            </svg>
+            <span id="viz-status-text" class="text-[10px] text-slate-400 mt-2">Checking...</span>
+          </div>
+        </div>
+      </div>
+
     </div>
 
     <!-- Controls -->
     <div class="flex flex-wrap justify-center items-center gap-4">
       <button id="pip-btn" class="px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 font-semibold text-sm transition-all shadow-md flex items-center gap-2">
-        <span>📌</span> Pop-out Floating Overlay (Prevents Tab Throttle)
+        <span>📌</span> Pop-out Floating Background Alert Widget
       </button>
 
-      <button id="enable-notifications-btn" class="px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 font-semibold text-sm transition-all shadow-md flex items-center gap-2">
-        <span>🔔</span> System Alerts
+      <button id="recalibrate-btn" class="px-5 py-2.5 rounded-lg bg-slate-700 hover:bg-slate-600 font-semibold text-sm transition-all shadow-md">
+        🎯 Recalibrate Neutral Posture
       </button>
-    </div>
-
-    <!-- Live Ergonomic Angle Metrics Dashboard -->
-    <div class="w-full max-w-2xl bg-slate-800/80 border border-slate-700 rounded-2xl p-5 text-sm grid grid-cols-3 gap-4 text-center">
-      <div>
-        <div class="text-xs text-slate-400 uppercase font-semibold">Neck Flexion</div>
-        <div id="metric-neck" class="text-xl font-bold text-indigo-400">0°</div>
-        <div class="text-[10px] text-slate-500">Limit: &le; 15°</div>
-      </div>
-      <div>
-        <div class="text-xs text-slate-400 uppercase font-semibold">CVA Angle</div>
-        <div id="metric-cva" class="text-xl font-bold text-indigo-400">0°</div>
-        <div class="text-[10px] text-slate-500">Limit: &ge; 50°</div>
-      </div>
-      <div>
-        <div class="text-xs text-slate-400 uppercase font-semibold">Shoulder Tilt</div>
-        <div id="metric-tilt" class="text-xl font-bold text-indigo-400">0°</div>
-        <div class="text-[10px] text-slate-500">Limit: &le; 5°</div>
-      </div>
     </div>
 
   </main>
@@ -103,24 +123,50 @@
     const postureIcon = document.getElementById('posture-icon');
     const postureText = document.getElementById('posture-text');
     const loadingOverlay = document.getElementById('loading-overlay');
-    const enableNotificationsBtn = document.getElementById('enable-notifications-btn');
+    const recalibrateBtn = document.getElementById('recalibrate-btn');
 
-    const metricNeck = document.getElementById('metric-neck');
-    const metricCva = document.getElementById('metric-cva');
-    const metricTilt = document.getElementById('metric-tilt');
+    // SVG Visualizer Elements
+    const liveVizCard = document.getElementById('live-viz-card');
+    const liveSvg = document.getElementById('live-svg');
+    const svgHead = document.getElementById('svg-head');
+    const svgSpine = document.getElementById('svg-spine');
+    const svgShoulders = document.getElementById('svg-shoulders');
+    const vizStatusText = document.getElementById('viz-status-text');
 
     let rawPostureState = "GOOD";
-    let smoothedPostureState = "GOOD";
     let postureReason = "";
-
     let rawFocusState = "OUT";
-    let smoothedFocusState = "OUT";
 
-    let notificationsAllowed = false;
-    let lastAlertTime = 0;
+    let lastExecutionTime = 0;
+    const TARGET_FPS = 15;
+    const FRAME_INTERVAL = 1000 / TARGET_FPS;
 
-    // PiP Stream setup to bypass tab throttling
-    const stream = canvasElement.captureStream(30);
+    // Calibration Baselines
+    let baselineHeadDist = null;
+    let baselineShoulderWidth = null;
+    let baselineDepthZ = null;
+    let isCalibrated = false;
+
+    // Background Audio Synthesizer
+    function playAlertSound() {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(220, audioCtx.currentTime + 0.25);
+        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.25);
+      } catch (e) {}
+    }
+
+    // PiP Background Canvas Setup
+    const stream = canvasElement.captureStream(15);
     pipVideo.srcObject = stream;
 
     pipBtn.addEventListener('click', async () => {
@@ -136,37 +182,42 @@
       }
     });
 
-    enableNotificationsBtn.addEventListener('click', async () => {
-      if ('Notification' in window) {
-        const permission = await Notification.requestPermission();
-        if (permission === 'granted') {
-          notificationsAllowed = true;
-          enableNotificationsBtn.textContent = "🔔 System Alerts Active";
-        }
-      }
+    recalibrateBtn.addEventListener('click', () => {
+      isCalibrated = false;
+      postureText.textContent = "Recalibrating...";
     });
 
-    function triggerSystemAlert(title, message) {
-      if (notificationsAllowed && (Date.now() - lastAlertTime > 8000)) {
-        lastAlertTime = Date.now();
-        new Notification(title, { body: message, tag: "posture-alert", renotify: true });
-      }
-    }
-
+    // Face Mesh (Optimized Options)
     const faceMesh = new FaceMesh({ locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}` });
-    faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5 });
+    faceMesh.setOptions({ maxNumFaces: 2, refineLandmarks: false, minDetectionConfidence: 0.5 });
 
+    // Pose Model (Optimized: Lite Complexity 0 for maximum CPU performance)
     const pose = new Pose({ locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
-    pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5 });
+    pose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5 });
 
     faceMesh.onResults(results => {
       if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) {
         rawFocusState = "OUT";
         return;
       }
-      const nose = results.multiFaceLandmarks[0][1];
-      const lCheek = results.multiFaceLandmarks[0][234];
-      const rCheek = results.multiFaceLandmarks[0][454];
+
+      // Filter: Lock exclusively onto the largest face in frame (Ignore secondary background people)
+      let primaryFace = results.multiFaceLandmarks[0];
+      let maxArea = 0;
+
+      for (const landmarks of results.multiFaceLandmarks) {
+        const width = Math.abs(landmarks[454].x - landmarks[234].x);
+        const height = Math.abs(landmarks[152].y - landmarks[10].y);
+        const area = width * height;
+        if (area > maxArea) {
+          maxArea = area;
+          primaryFace = landmarks;
+        }
+      }
+
+      const nose = primaryFace[1];
+      const lCheek = primaryFace[234];
+      const rCheek = primaryFace[454];
       const yaw = Math.abs(nose.x - lCheek.x) / (Math.abs(nose.x - rCheek.x) + 0.0001);
       
       rawFocusState = (yaw < 0.35 || yaw > 2.85) ? "TURNING" : "IN";
@@ -180,80 +231,133 @@
 
       canvasCtx.save();
       canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+      // Render camera image
       canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
 
       if (results.poseLandmarks) {
         const lm = results.poseLandmarks;
         const leftEar = lm[7], rightEar = lm[8];
         const leftShoulder = lm[11], rightShoulder = lm[12];
+        const nose = lm[0];
 
-        if (leftShoulder && rightShoulder && leftShoulder.visibility > 0.5) {
-          const earMidX = (leftEar.x + rightEar.x) / 2;
-          const earMidY = (leftEar.y + rightEar.y) / 2;
-          const shoulderMidX = (leftShoulder.x + rightShoulder.x) / 2;
+        if (leftShoulder && rightShoulder && nose && leftShoulder.visibility > 0.5) {
+          
           const shoulderMidY = (leftShoulder.y + rightShoulder.y) / 2;
+          const shoulderWidth = Math.hypot(leftShoulder.x - rightShoulder.x, leftShoulder.y - rightShoulder.y);
+          
+          const earMidY = (leftEar && rightEar) ? (leftEar.y + rightEar.y) / 2 : nose.y;
+          const headToShoulderDist = Math.abs(earMidY - shoulderMidY) / (shoulderWidth + 0.0001);
 
-          // 1. Neck Flexion Angle (Forward Head Protrusion)
-          const dxNeck = (earMidX - shoulderMidX) * canvasElement.width;
-          const dyNeck = (shoulderMidY - earMidY) * canvasElement.height;
-          const neckFlexionDeg = Math.abs(Math.atan2(dxNeck, dyNeck) * (180 / Math.PI));
+          // Shoulder Depth Z (Convexity / Forward Rounding)
+          const avgShoulderZ = (leftShoulder.z + rightShoulder.z) / 2;
+          const relativeRoundingZ = nose.z - avgShoulderZ;
 
-          // 2. Craniovertebral Angle (CVA)
-          const cvaDeg = Math.abs(Math.atan2(dyNeck, Math.abs(dxNeck)) * (180 / Math.PI));
+          // Calibration baseline lock
+          if (!isCalibrated) {
+            baselineHeadDist = headToShoulderDist;
+            baselineShoulderWidth = shoulderWidth;
+            baselineDepthZ = relativeRoundingZ;
+            isCalibrated = true;
+          }
 
-          // 3. Shoulder Lateral Tilt (Normalized to account for clothing & perspective)
-          const rawShoulderTilt = Math.abs((rightShoulder.y - leftShoulder.y) * canvasElement.height);
-          const shoulderWidth = Math.hypot(leftShoulder.x - rightShoulder.x, leftShoulder.y - rightShoulder.y) * canvasElement.width;
-          const normalizedTilt = rawShoulderTilt / (shoulderWidth + 0.0001);
-          const shoulderTiltDeg = Math.abs(Math.atan2(rawShoulderTilt, shoulderWidth) * (180 / Math.PI));
+          // Ergonomic Deviations Thresholds
+          const isNeckBent = headToShoulderDist < (baselineHeadDist * 0.72); // Neck bent forward
+          const isLeaningTooClose = shoulderWidth > (baselineShoulderWidth * 1.28); // Body bent towards camera
+          const isShouldersRounded = relativeRoundingZ < (baselineDepthZ - 0.12); // Convex shoulders
 
-          // Dashboard Updates
-          metricNeck.textContent = `${Math.round(neckFlexionDeg)}°`;
-          metricCva.textContent = `${Math.round(cvaDeg)}°`;
-          metricTilt.textContent = `${Math.round(shoulderTiltDeg)}°`;
-
-          // Ergonomic Rules Check
-          if (neckFlexionDeg > 18 || cvaDeg < 48) {
+          if (isNeckBent) {
             rawPostureState = "BAD";
-            postureReason = "Forward Head / Slouching";
-          } else if (normalizedTilt > 0.12) {
+            postureReason = "Neck Bent Forward";
+          } else if (isLeaningTooClose) {
             rawPostureState = "BAD";
-            postureReason = "Asymmetric Shoulder Tilt";
+            postureReason = "Body Bent Forward";
+          } else if (isShouldersRounded) {
+            rawPostureState = "BAD";
+            postureReason = "Rounded / Convex Shoulders";
           } else {
             rawPostureState = "GOOD";
-            postureReason = "Good Ergonomics";
+            postureReason = "Good Posture";
           }
         }
       }
+
+      // Draw background alert banner if user is viewing PiP overlay from another app
+      renderOverlayAlertsOnCanvas();
 
       canvasCtx.restore();
       updateUI();
       loadingOverlay.classList.add('hidden');
     });
 
-    function updateUI() {
-      if (rawPostureState === "BAD") {
-        postureText.textContent = postureReason;
-        postureText.className = "text-base font-bold text-red-400";
-        triggerSystemAlert("⚠️ Ergonomic Alert", postureReason);
-      } else {
-        postureText.textContent = "Good Ergonomics";
-        postureText.className = "text-base font-bold text-green-400";
-      }
-
-      if (rawFocusState === "IN") {
-        focusText.textContent = "In Focus";
-        focusText.className = "text-base font-bold text-green-400";
-      } else {
-        focusText.textContent = "Focus Lost";
-        focusText.className = "text-base font-bold text-amber-400";
+    // Render Overlay Directly into Canvas for Floating PiP Pop-ups
+    function renderOverlayAlertsOnCanvas() {
+      if (rawPostureState === "BAD" || rawFocusState !== "IN") {
+        canvasCtx.fillStyle = "rgba(239, 68, 68, 0.88)";
+        canvasCtx.fillRect(0, 0, canvasElement.width, 70);
+        canvasCtx.fillStyle = "#ffffff";
+        canvasCtx.font = "bold 22px sans-serif";
+        canvasCtx.textAlign = "center";
+        
+        const alertMsg = rawPostureState === "BAD" ? `⚠️ POSTURE ALERT: ${postureReason}` : "👁️ FOCUS LOST: Look at Screen";
+        canvasCtx.fillText(alertMsg, canvasElement.width / 2, 43);
       }
     }
 
+    function updateUI() {
+      // Focus Status
+      if (rawFocusState === "IN") {
+        focusIcon.textContent = "👁️";
+        focusText.textContent = "In Focus";
+        focusText.className = "text-base font-bold text-green-400";
+      } else {
+        focusIcon.textContent = "⚠️";
+        focusText.textContent = "Focus Lost";
+        focusText.className = "text-base font-bold text-amber-400";
+      }
+
+      // Posture Status & Animated SVG Sync
+      if (rawPostureState === "GOOD") {
+        postureText.textContent = "Good Posture";
+        postureText.className = "text-base font-bold text-green-400";
+        mirrorCard.className = "lg:col-span-2 relative aspect-video rounded-2xl bg-slate-800 border-2 border-slate-700 overflow-hidden transition-all duration-300 glow-good";
+        
+        // Reset SVG Visualizer
+        liveSvg.style.stroke = "#22c55e";
+        svgSpine.setAttribute("d", "M25 18 L25 50");
+        svgShoulders.setAttribute("d", "M12 28 L38 28");
+        svgHead.setAttribute("cy", "12");
+        vizStatusText.textContent = "Perfect Alignment";
+        vizStatusText.className = "text-[10px] text-green-400 mt-2 font-semibold";
+      } else {
+        postureText.textContent = postureReason;
+        postureText.className = "text-base font-bold text-red-400";
+        mirrorCard.className = "lg:col-span-2 relative aspect-video rounded-2xl bg-slate-800 border-2 border-slate-700 overflow-hidden transition-all duration-300 glow-bad animate-alert";
+        playAlertSound();
+
+        // Update SVG Visualizer based on error type
+        liveSvg.style.stroke = "#ef4444";
+        if (postureReason.includes("Neck")) {
+          svgSpine.setAttribute("d", "M25 22 L25 50");
+          svgHead.setAttribute("cy", "16"); // Head dropped
+        } else if (postureReason.includes("Convex") || postureReason.includes("Body")) {
+          svgSpine.setAttribute("d", "M25 18 Q 33 34 25 50"); // Curved/slouched spine
+          svgShoulders.setAttribute("d", "M16 30 L34 30"); // Rounded inward shoulders
+        }
+        vizStatusText.textContent = postureReason;
+        vizStatusText.className = "text-[10px] text-red-400 mt-2 font-semibold";
+      }
+    }
+
+    // Throttle Frame Processing Loop (15 FPS target for high CPU efficiency)
     const camera = new Camera(videoElement, {
       onFrame: async () => {
-        await faceMesh.send({ image: videoElement });
-        await pose.send({ image: videoElement });
+        const now = performance.now();
+        if (now - lastExecutionTime >= FRAME_INTERVAL) {
+          lastExecutionTime = now;
+          await faceMesh.send({ image: videoElement });
+          await pose.send({ image: videoElement });
+        }
       },
       width: 640,
       height: 480
