@@ -13,12 +13,61 @@
     .glow-good { box-shadow: 0 0 20px rgba(34, 197, 94, 0.25); }
     .glow-warning { box-shadow: 0 0 20px rgba(234, 179, 8, 0.25); }
     .glow-bad { box-shadow: 0 0 25px rgba(239, 68, 68, 0.4); }
+    
+    @keyframes pulse-border {
+      0%, 100% { border-color: rgba(239, 68, 68, 0.8); box-shadow: 0 0 25px rgba(239, 68, 68, 0.5); }
+      50% { border-color: rgba(239, 68, 68, 0.3); box-shadow: 0 0 10px rgba(239, 68, 68, 0.2); }
+    }
+    .popup-alert { animation: pulse-border 1.5s infinite ease-in-out; }
+
+    @keyframes spine-correct {
+      0% { d: path("M25 18 Q 35 34 25 50"); }
+      50% { d: path("M25 18 Q 15 34 25 50"); }
+      100% { d: path("M25 18 L25 50"); }
+    }
+    .animate-spine-guide { animation: spine-correct 2s infinite ease-in-out; }
   </style>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans">
 
+  <!-- Floating Mirror & Correction Pop-up Modal -->
+  <div id="correctionPopup" class="hidden fixed bottom-6 right-6 z-50 w-80 bg-slate-800/95 border-2 border-red-500 rounded-2xl shadow-2xl backdrop-blur-md overflow-hidden popup-alert transition-all duration-300">
+    <div class="bg-slate-900/90 px-4 py-2 border-b border-slate-700 flex items-center justify-between cursor-move" id="popupHeader">
+      <div class="flex items-center gap-2">
+        <span class="text-sm">🚨</span>
+        <span id="popupTitle" class="text-xs font-bold text-red-400 tracking-wide uppercase">Ergonomic Alert</span>
+      </div>
+      <button id="closePopupBtn" class="text-slate-400 hover:text-slate-200 text-sm font-bold px-1">✕</button>
+    </div>
+    
+    <div class="p-3 flex flex-col gap-3">
+      <!-- Live Video Mirror Canvas in Pop-up -->
+      <div class="relative aspect-video rounded-lg bg-black overflow-hidden border border-slate-700">
+        <canvas id="popupCanvas" class="w-full h-full object-cover transform -scale-x-100"></canvas>
+        <div class="absolute bottom-1.5 left-2 bg-slate-900/80 px-2 py-0.5 rounded text-[10px] text-slate-300 font-semibold">
+          Live Mirror
+        </div>
+      </div>
+
+      <!-- Animated Posture Correction & Instructions -->
+      <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-700 flex items-center gap-3">
+        <div class="w-12 h-12 flex-shrink-0 flex items-center justify-center bg-slate-800 rounded-lg">
+          <svg class="w-8 h-8 stroke-green-400" viewBox="0 0 50 60" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="25" cy="12" r="6" />
+            <path d="M12 28 L38 28" />
+            <path class="animate-spine-guide" d="M25 18 L25 50" />
+          </svg>
+        </div>
+        <div>
+          <div id="popupReason" class="text-xs font-bold text-red-400">Slouch Detected!</div>
+          <div id="popupGuide" class="text-[11px] text-slate-300 mt-0.5">Sit straight, pull shoulders back, and align head with spine.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Navigation Bar -->
-  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-40">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center gap-3">
         <span class="text-2xl">🛡️</span>
@@ -111,6 +160,15 @@
     const canvasElement = document.getElementById('canvasElement');
     const canvasCtx = canvasElement.getContext('2d');
 
+    // Pop-up Canvas Elements
+    const correctionPopup = document.getElementById('correctionPopup');
+    const popupCanvas = document.getElementById('popupCanvas');
+    const popupCtx = popupCanvas.getContext('2d');
+    const popupReason = document.getElementById('popupReason');
+    const popupGuide = document.getElementById('popupGuide');
+    const closePopupBtn = document.getElementById('closePopupBtn');
+    let popupManuallyClosed = false;
+
     // UI Elements
     const focusIcon = document.getElementById('focusIcon');
     const focusText = document.getElementById('focusText');
@@ -148,6 +206,12 @@
     let postureGoodStartTime = null;
     let hasPlayedSoundForCurrentBadState = false;
     const DEBOUNCE_DELAY_MS = 2000;
+
+    // Close Popup Listener
+    closePopupBtn.addEventListener('click', () => {
+      correctionPopup.classList.add('hidden');
+      popupManuallyClosed = true;
+    });
 
     // Audio Alert Chime Synthesis
     function playAlertChime() {
@@ -278,6 +342,13 @@
       }
 
       canvasCtx.restore();
+
+      // Mirror canvas content onto pop-up canvas
+      popupCanvas.width = canvasElement.width;
+      popupCanvas.height = canvasElement.height;
+      popupCtx.clearRect(0, 0, popupCanvas.width, popupCanvas.height);
+      popupCtx.drawImage(canvasElement, 0, 0);
+
       processPostureDebounce();
       updateUI();
     });
@@ -337,11 +408,12 @@
         } else if (now - postureGoodStartTime >= DEBOUNCE_DELAY_MS) {
           smoothedPostureState = "GOOD";
           hasPlayedSoundForCurrentBadState = false;
+          popupManuallyClosed = false; // Reset manually closed state on recovery
         }
       }
     }
 
-    // Update UI Elements
+    // Update UI Elements and Control Pop-up Visibility
     function updateUI() {
       // Focus UI
       if (rawFocusState === "NO_HUMAN") {
@@ -358,7 +430,7 @@
         focusText.className = "text-base font-bold text-amber-400";
       }
 
-      // Posture UI
+      // Posture UI & Pop-up Control
       if (rawPostureState === "NO_HUMAN") {
         postureIcon.textContent = "👤";
         postureText.textContent = "No Person Detected";
@@ -368,7 +440,9 @@
         liveSvg.style.stroke = "#64748b";
         vizStatusText.textContent = "Waiting for user...";
         vizStatusText.className = "text-[10px] text-slate-400 mt-2 font-semibold";
-      } else if (smoothedPostureState === "GOOD") {
+
+        correctionPopup.classList.add('hidden');
+      } else if (smoothedPostureState === "GOOD" && rawFocusState === "IN") {
         postureIcon.textContent = "🧘";
         postureText.textContent = "Good Posture";
         postureText.className = "text-base font-bold text-green-400";
@@ -381,6 +455,8 @@
         vizStatusText.textContent = "Aligned";
         vizStatusText.className = "text-[10px] text-green-400 mt-2 font-semibold";
 
+        // Hide Pop-up on good state
+        correctionPopup.classList.add('hidden');
       } else if (smoothedPostureState === "SLIGHT") {
         postureIcon.textContent = "⚠️";
         postureText.textContent = "Slight Posture Shift";
@@ -391,9 +467,10 @@
         vizStatusText.textContent = "Slight Shift";
         vizStatusText.className = "text-[10px] text-amber-400 mt-2 font-semibold";
 
-      } else if (smoothedPostureState === "BAD") {
+        correctionPopup.classList.add('hidden');
+      } else if (smoothedPostureState === "BAD" || rawFocusState === "TURNING") {
         postureIcon.textContent = "🚨";
-        postureText.textContent = postureReason;
+        postureText.textContent = smoothedPostureState === "BAD" ? postureReason : "Focus Lost";
         postureText.className = "text-base font-bold text-red-400";
         mirrorCard.className = "lg:col-span-2 relative aspect-video rounded-2xl bg-slate-800 border-2 border-slate-700 overflow-hidden transition-all duration-300 glow-bad";
 
@@ -402,6 +479,13 @@
         svgHead.setAttribute("cy", "16");
         vizStatusText.textContent = postureReason;
         vizStatusText.className = "text-[10px] text-red-400 mt-2 font-semibold";
+
+        // Show Floating Pop-up mirror with posture correction
+        if (!popupManuallyClosed) {
+          popupReason.textContent = smoothedPostureState === "BAD" ? postureReason : "Focus Turned Away";
+          popupGuide.textContent = smoothedPostureState === "BAD" ? "Sit straight, align head and shoulders!" : "Turn back and face the camera directly.";
+          correctionPopup.classList.remove('hidden');
+        }
       }
     }
 
