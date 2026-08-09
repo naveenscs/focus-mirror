@@ -37,7 +37,7 @@
   <!-- Header -->
   <header class="text-center max-w-2xl mb-6">
     <h1 class="text-3xl font-extrabold text-indigo-400 tracking-tight sm:text-4xl">Focus Mirror & Posture AI</h1>
-    <p class="text-slate-400 text-sm mt-2">Enhanced 3D torso geometry tracking & side-turn suppression.</p>
+    <p class="text-slate-400 text-sm mt-2">Enhanced 3D torso geometry tracking with live sensitivity tuning.</p>
   </header>
 
   <!-- Main Container -->
@@ -87,6 +87,61 @@
       <button id="enable-notifications-btn" class="px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 font-semibold text-sm transition-all shadow-md flex items-center gap-2">
         <span>🔔</span> Enable Background Pop-ups & Audio
       </button>
+
+      <button id="toggle-settings-btn" class="px-5 py-2.5 rounded-lg bg-slate-700 hover:bg-slate-600 active:bg-slate-800 font-semibold text-sm transition-all shadow-md flex items-center gap-2">
+        <span>⚙️</span> Sensitivity Controls
+      </button>
+    </div>
+
+    <!-- Live Sensitivity Settings Panel -->
+    <div id="settings-panel" class="w-full max-w-2xl bg-slate-800/90 border border-slate-700 rounded-2xl p-5 hidden transition-all">
+      <h3 class="text-lg font-bold text-indigo-400 mb-4 flex items-center gap-2">
+        <span>⚙️</span> Posture Threshold & Sensitivity Tuning
+      </h3>
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5 text-sm">
+        
+        <!-- Bending Threshold Slider -->
+        <div class="flex flex-col gap-1.5">
+          <div class="flex justify-between font-medium">
+            <label for="slider-bend" class="text-slate-300">Forward Bend Sensitivity</label>
+            <span id="val-bend" class="text-indigo-400 font-bold">25%</span>
+          </div>
+          <input type="range" id="slider-bend" min="10" max="45" value="25" class="w-full accent-indigo-500 cursor-pointer">
+          <span class="text-xs text-slate-500">Higher = Allows more slouch/bending before alerting.</span>
+        </div>
+
+        <!-- Depth Lean Threshold Slider -->
+        <div class="flex flex-col gap-1.5">
+          <div class="flex justify-between font-medium">
+            <label for="slider-depth" class="text-slate-300">Lean Back Sensitivity</label>
+            <span id="val-depth" class="text-indigo-400 font-bold">25%</span>
+          </div>
+          <input type="range" id="slider-depth" min="10" max="45" value="25" class="w-full accent-indigo-500 cursor-pointer">
+          <span class="text-xs text-slate-500">Higher = Allows further backward lean before alerting.</span>
+        </div>
+
+        <!-- Lateral Tilt Slider -->
+        <div class="flex flex-col gap-1.5">
+          <div class="flex justify-between font-medium">
+            <label for="slider-tilt" class="text-slate-300">Shoulder Tilt Tolerance</label>
+            <span id="val-tilt" class="text-indigo-400 font-bold">0.09</span>
+          </div>
+          <input type="range" id="slider-tilt" min="0.04" max="0.18" step="0.01" value="0.09" class="w-full accent-indigo-500 cursor-pointer">
+          <span class="text-xs text-slate-500">Higher = Permits higher side-leaning/tilting.</span>
+        </div>
+
+        <!-- Buffer Delay Slider -->
+        <div class="flex flex-col gap-1.5">
+          <div class="flex justify-between font-medium">
+            <label for="slider-delay" class="text-slate-300">Alert Buffer Time</label>
+            <span id="val-delay" class="text-indigo-400 font-bold">1.8s</span>
+          </div>
+          <input type="range" id="slider-delay" min="0.5" max="5.0" step="0.1" value="1.8" class="w-full accent-indigo-500 cursor-pointer">
+          <span class="text-xs text-slate-500">Time required in bad posture before alert triggers.</span>
+        </div>
+
+      </div>
     </div>
 
   </main>
@@ -108,6 +163,54 @@
     const loadingOverlay = document.getElementById('loading-overlay');
     const recalibrateBtn = document.getElementById('recalibrate-btn');
     const enableNotificationsBtn = document.getElementById('enable-notifications-btn');
+    const toggleSettingsBtn = document.getElementById('toggle-settings-btn');
+    const settingsPanel = document.getElementById('settings-panel');
+
+    // Threshold Sliders & Value Elements
+    const sliderBend = document.getElementById('slider-bend');
+    const sliderDepth = document.getElementById('slider-depth');
+    const sliderTilt = document.getElementById('slider-tilt');
+    const sliderDelay = document.getElementById('slider-delay');
+
+    const valBend = document.getElementById('val-bend');
+    const valDepth = document.getElementById('val-depth');
+    const valTilt = document.getElementById('val-tilt');
+    const valDelay = document.getElementById('val-delay');
+
+    // Dynamic Threshold Values
+    let bendThresholdFactor = 0.25;  // 25% drop allowed
+    let depthThresholdFactor = 0.25; // 25% drop in shoulder width allowed
+    let tiltThreshold = 0.09;
+    let postureDelayMs = 1800;
+
+    // Slider Event Listeners
+    sliderBend.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      valBend.textContent = `${val}%`;
+      bendThresholdFactor = val / 100;
+    });
+
+    sliderDepth.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      valDepth.textContent = `${val}%`;
+      depthThresholdFactor = val / 100;
+    });
+
+    sliderTilt.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      valTilt.textContent = val.toFixed(2);
+      tiltThreshold = val;
+    });
+
+    sliderDelay.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      valDelay.textContent = `${val.toFixed(1)}s`;
+      postureDelayMs = val * 1000;
+    });
+
+    toggleSettingsBtn.addEventListener('click', () => {
+      settingsPanel.classList.toggle('hidden');
+    });
 
     // State Variables
     let rawFocusState = "OUT";
@@ -120,7 +223,6 @@
     // Delay Buffers
     let postureBadStartTime = null;
     let postureGoodStartTime = null;
-    const POSTURE_DELAY_MS = 1800; // 1.8s buffer to prevent false triggers during movement
 
     let focusOutStartTime = null;
     let focusInStartTime = null;
@@ -239,7 +341,7 @@
       }
     });
 
-    // Process Pose with 3D Geometry
+    // Process Pose with Dynamic Thresholds
     pose.onResults((results) => {
       if (canvasElement.width !== videoElement.videoWidth) {
         canvasElement.width = videoElement.videoWidth || 640;
@@ -260,45 +362,33 @@
 
         if (leftShoulder && rightShoulder && nose && leftShoulder.visibility > 0.5 && rightShoulder.visibility > 0.5) {
           
-          // 1. Calculate Shoulder Midpoint & Distance Metrics
           const shoulderMidX = (leftShoulder.x + rightShoulder.x) / 2;
           const shoulderMidY = (leftShoulder.y + rightShoulder.y) / 2;
 
-          // Euclidean distance between shoulders (Width)
           const currShoulderWidth = Math.hypot(leftShoulder.x - rightShoulder.x, leftShoulder.y - rightShoulder.y);
 
-          // Head-to-Shoulder Vertical Distance (Normalized by shoulder width to make scale-invariant)
           const earMidY = (leftEar && rightEar) ? (leftEar.y + rightEar.y) / 2 : nose.y;
           const rawHeadToShoulderDist = Math.abs(earMidY - shoulderMidY);
           const normalizedHeadToShoulder = rawHeadToShoulderDist / (currShoulderWidth + 0.0001);
 
-          // 2. Torso Yaw / Sideways Turn Detection
-          // If shoulders or head are rotated significantly sideways, suppress standard horizontal tilt false positives
           const shoulderDx = Math.abs(leftShoulder.x - rightShoulder.x);
           const isBodyTurnedSideways = (shoulderDx / (currShoulderWidth + 0.0001)) < 0.7;
 
-          // 3. Auto-Calibration Baseline
+          // Calibration Step
           if (!isCalibrated) {
             baselineHeadToShoulderDist = normalizedHeadToShoulder;
             baselineShoulderWidth = currShoulderWidth;
             isCalibrated = true;
           }
 
-          // 4. Posture Checks
-          // A. Forward Slouch / Bending Shoulders & Waist (Head drops toward shoulders)
-          const isBendingForward = normalizedHeadToShoulder < (baselineHeadToShoulderDist * 0.75);
+          // Dynamic Checks using Slider Variables
+          const isBendingForward = normalizedHeadToShoulder < (baselineHeadToShoulderDist * (1 - bendThresholdFactor));
+          const isLeaningBack = !isBodyTurnedSideways && (currShoulderWidth < baselineShoulderWidth * (1 - depthThresholdFactor));
+          const isLeaningForward = !isBodyTurnedSideways && (currShoulderWidth > baselineShoulderWidth * (1 + depthThresholdFactor * 1.4));
 
-          // B. Leaning Back / Far Depth Shift (Shoulder width shrinks significantly relative to baseline without side rotation)
-          const isLeaningBack = !isBodyTurnedSideways && (currShoulderWidth < baselineShoulderWidth * 0.75);
+          const currShoulderTilt = Math.abs(leftShoulder.y - rightShoulder.y);
+          const isLateralLeaning = !isBodyTurnedSideways && (currShoulderTilt > tiltThreshold);
 
-          // C. Leaning Too Far Forward (Shoulder width expands beyond baseline limit)
-          const isLeaningForward = !isBodyTurnedSideways && (currShoulderWidth > baselineShoulderWidth * 1.35);
-
-          // D. Asymmetric Lateral Leaning / Slouching (Only evaluated when NOT turned sideways)
-          const shoulderTilt = Math.abs(leftShoulder.y - rightShoulder.y);
-          const isLateralLeaning = !isBodyTurnedSideways && (shoulderTilt > 0.09);
-
-          // Evaluate bad posture & assign descriptive reason
           if (isBendingForward) {
             rawPostureState = "BAD";
             postureReason = "Bending Shoulders / Waist";
@@ -334,7 +424,7 @@
       if (rawPostureState === "BAD") {
         postureGoodStartTime = null;
         if (!postureBadStartTime) postureBadStartTime = now;
-        if (now - postureBadStartTime >= POSTURE_DELAY_MS) {
+        if (now - postureBadStartTime >= postureDelayMs) {
           if (smoothedPostureState !== "BAD") {
             smoothedPostureState = "BAD";
             triggerSystemAlert("⚠️ Posture Alert!", `${postureReason}. Adjust your seating position.`);
@@ -343,7 +433,7 @@
       } else {
         postureBadStartTime = null;
         if (!postureGoodStartTime) postureGoodStartTime = now;
-        if (now - postureGoodStartTime >= POSTURE_DELAY_MS) {
+        if (now - postureGoodStartTime >= postureDelayMs) {
           smoothedPostureState = "GOOD";
         }
       }
@@ -373,7 +463,6 @@
 
     // Update Badges & Glows
     function updateUI() {
-      // Focus UI
       if (smoothedFocusState === "IN") {
         focusIcon.textContent = "👁️";
         focusText.textContent = "In Focus";
@@ -391,7 +480,6 @@
         focusBadge.className = "flex items-center gap-3 px-5 py-3 rounded-xl bg-slate-800 border border-red-500/40";
       }
 
-      // Posture UI
       if (smoothedPostureState === "GOOD") {
         postureIcon.textContent = "🧘";
         postureText.textContent = "Good Posture";
@@ -404,7 +492,6 @@
         postureBadge.className = "flex items-center gap-3 px-5 py-3 rounded-xl bg-slate-800 border border-red-500/40";
       }
 
-      // Card Ambient Glow
       mirrorCard.classList.remove("glow-good", "glow-warning", "glow-bad");
       if (smoothedFocusState === "IN" && smoothedPostureState === "GOOD") {
         mirrorCard.classList.add("glow-good");
@@ -415,14 +502,12 @@
       }
     }
 
-    // Recalibrate Button Listener
     recalibrateBtn.addEventListener('click', () => {
       isCalibrated = false;
       postureText.textContent = "Recalibrating...";
       postureText.className = "text-base font-bold text-indigo-400";
     });
 
-    // Camera Start
     const camera = new Camera(videoElement, {
       onFrame: async () => {
         await faceMesh.send({ image: videoElement });
