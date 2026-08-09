@@ -76,6 +76,10 @@
         </h1>
       </div>
       <div class="flex items-center gap-3">
+        <button id="notifyPermissionBtn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-semibold transition flex items-center gap-2">
+          <span id="notifyIcon">🔔</span>
+          <span id="notifyText">Enable OS Notifications</span>
+        </button>
         <button id="soundToggleBtn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-semibold transition flex items-center gap-2">
           <span id="soundIcon">🔊</span>
           <span id="soundText">Sound On</span>
@@ -179,6 +183,9 @@
     const soundToggleBtn = document.getElementById('soundToggleBtn');
     const soundIcon = document.getElementById('soundIcon');
     const soundText = document.getElementById('soundText');
+    const notifyPermissionBtn = document.getElementById('notifyPermissionBtn');
+    const notifyIcon = document.getElementById('notifyIcon');
+    const notifyText = document.getElementById('notifyText');
 
     const liveSvg = document.getElementById('liveSvg');
     const svgHead = document.getElementById('svgHead');
@@ -201,6 +208,12 @@
     let currentNeckAngle = 0;
     let currentTiltAngle = 0;
 
+    // System Notification State
+    let lastNotificationTime = 0;
+    const NOTIFICATION_COOLDOWN_MS = 10000; // Throttle desktop notifications to every 10s
+    let originalTitle = document.title;
+    let titleInterval = null;
+
     // Debounce & Audio Logic States
     let postureBadStartTime = null;
     let postureGoodStartTime = null;
@@ -220,6 +233,71 @@
     }
     window.addEventListener('click', initAudioContext, { once: true });
     window.addEventListener('keydown', initAudioContext, { once: true });
+
+    // Request OS Notification Permission
+    async function requestNotificationPermission() {
+      if (!("Notification" in window)) {
+        alert("This browser does not support desktop notifications.");
+        return;
+      }
+      const permission = await Notification.requestPermission();
+      updateNotificationBtnUI(permission);
+    }
+
+    function updateNotificationBtnUI(permission) {
+      if (permission === "granted") {
+        notifyIcon.textContent = "🔕";
+        notifyText.textContent = "OS Alerts Active";
+        notifyPermissionBtn.classList.replace("bg-slate-800", "bg-emerald-900/40");
+        notifyPermissionBtn.classList.replace("border-slate-700", "border-emerald-600");
+      } else if (permission === "denied") {
+        notifyIcon.textContent = "🚫";
+        notifyText.textContent = "OS Alerts Blocked";
+      }
+    }
+
+    notifyPermissionBtn.addEventListener('click', () => {
+      requestNotificationPermission();
+    });
+
+    // Check initial notification status on startup
+    if ("Notification" in window) {
+      updateNotificationBtnUI(Notification.permission);
+    }
+
+    // Trigger System Level OS Pop-up Notification
+    function triggerSystemNotification(title, message) {
+      // Send OS Notification if tab is hidden/out of focus
+      if ("Notification" in window && Notification.permission === "granted") {
+        const now = Date.now();
+        if (now - lastNotificationTime > NOTIFICATION_COOLDOWN_MS) {
+          const notification = new Notification(`🚨 ${title}`, {
+            body: message,
+            requireInteraction: false
+          });
+          notification.onclick = () => {
+            window.focus();
+            notification.close();
+          };
+          lastNotificationTime = now;
+        }
+      }
+
+      // Flash Page Tab Title
+      if (!titleInterval) {
+        titleInterval = setInterval(() => {
+          document.title = document.title === originalTitle ? "🚨 BAD POSTURE DETECTED!" : originalTitle;
+        }, 1000);
+      }
+    }
+
+    function resetTitleAlert() {
+      if (titleInterval) {
+        clearInterval(titleInterval);
+        titleInterval = null;
+        document.title = originalTitle;
+      }
+    }
 
     // Close Popup Listener
     closePopupBtn.addEventListener('click', () => {
@@ -428,6 +506,7 @@
           }
           if (!hasPlayedSoundForCurrentBadState) {
             playAlertChime();
+            triggerSystemNotification("Ergonomic Warning", postureReason + " - Please sit straight!");
             hasPlayedSoundForCurrentBadState = true;
           }
         }
@@ -444,6 +523,7 @@
           smoothedPostureState = "GOOD";
           hasPlayedSoundForCurrentBadState = false;
           popupManuallyClosed = false; // Reset manually closed state on recovery
+          resetTitleAlert();
         }
       }
     }
@@ -477,6 +557,7 @@
         vizStatusText.className = "text-[10px] text-slate-400 mt-2 font-semibold";
 
         correctionPopup.classList.add('hidden');
+        resetTitleAlert();
       } else if (smoothedPostureState === "GOOD" && rawFocusState === "IN") {
         postureIcon.textContent = "🧘";
         postureText.textContent = "Good Posture";
@@ -492,6 +573,7 @@
 
         // Hide Pop-up on good state
         correctionPopup.classList.add('hidden');
+        resetTitleAlert();
       } else if (smoothedPostureState === "SLIGHT") {
         postureIcon.textContent = "⚠️";
         postureText.textContent = "Slight Posture Shift";
