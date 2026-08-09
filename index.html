@@ -207,6 +207,20 @@
     let hasPlayedSoundForCurrentBadState = false;
     const DEBOUNCE_DELAY_MS = 2000;
 
+    // Global Audio Context initialized on user gesture
+    let audioCtx = null;
+    function initAudioContext() {
+      if (!audioCtx) {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AudioCtx();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+    window.addEventListener('click', initAudioContext, { once: true });
+    window.addEventListener('keydown', initAudioContext, { once: true });
+
     // Close Popup Listener
     closePopupBtn.addEventListener('click', () => {
       correctionPopup.classList.add('hidden');
@@ -217,23 +231,24 @@
     function playAlertChime() {
       if (!soundEnabled) return;
       try {
-        const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        const ctx = new AudioCtx();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
+        if (!audioCtx) initAudioContext();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
 
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(440, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(220, ctx.currentTime + 0.3);
+        osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(220, audioCtx.currentTime + 0.3);
 
-        gain.gain.setValueAtTime(0.3, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(audioCtx.destination);
 
         osc.start();
-        osc.stop(ctx.currentTime + 0.3);
+        osc.stop(audioCtx.currentTime + 0.3);
       } catch (e) {
         console.error("Audio playback error:", e);
       }
@@ -244,6 +259,7 @@
       soundEnabled = !soundEnabled;
       soundIcon.textContent = soundEnabled ? "🔊" : "🔇";
       soundText.textContent = soundEnabled ? "Sound On" : "Sound Off";
+      initAudioContext();
     });
 
     // Recalibrate Baseline
@@ -255,24 +271,43 @@
     const faceMesh = new FaceMesh({
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
     });
-    faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+    faceMesh.setOptions({ maxNumFaces: 4, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
 
     const pose = new Pose({
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
     });
     pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
 
-    // Face Mesh Callback (With Presence Detection)
+    // Helper: Find Primary Person (Largest face closest to camera)
+    function getPrimaryFaceLandmarks(multiFaceLandmarks) {
+      if (!multiFaceLandmarks || multiFaceLandmarks.length === 0) return null;
+      let primaryFace = null;
+      let maxArea = -1;
+
+      multiFaceLandmarks.forEach(landmarks => {
+        const lCheek = landmarks[234];
+        const rCheek = landmarks[454];
+        const dist = Math.hypot(lCheek.x - rCheek.x, lCheek.y - rCheek.y);
+        if (dist > maxArea) {
+          maxArea = dist;
+          primaryFace = landmarks;
+        }
+      });
+      return primaryFace;
+    }
+
+    // Face Mesh Callback (Locks onto primary person in foreground)
     faceMesh.onResults(results => {
-      if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) {
+      const primaryLandmarks = getPrimaryFaceLandmarks(results.multiFaceLandmarks);
+      if (!primaryLandmarks) {
         rawFocusState = "NO_HUMAN";
         isHumanPresent = false;
         return;
       }
       isHumanPresent = true;
-      const nose = results.multiFaceLandmarks[0][1];
-      const lCheek = results.multiFaceLandmarks[0][234];
-      const rCheek = results.multiFaceLandmarks[0][454];
+      const nose = primaryLandmarks[1];
+      const lCheek = primaryLandmarks[234];
+      const rCheek = primaryLandmarks[454];
       const yaw = Math.abs(nose.x - lCheek.x) / (Math.abs(nose.x - rCheek.x) + 0.0001);
       
       rawFocusState = (yaw < 0.35 || yaw > 2.85) ? "TURNING" : "IN";
