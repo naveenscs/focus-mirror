@@ -3,310 +3,352 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Focus Mirror & Smart Posture Tracker</title>
-  
+  <title>Smart AI Ergonomic Guard</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- MediaPipe Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
-
   <style>
-    .glow-good { box-shadow: 0 0 25px rgba(34, 197, 94, 0.35); border-color: #22c55e !important; }
-    .glow-bad { box-shadow: 0 0 25px rgba(239, 68, 68, 0.45); border-color: #ef4444 !important; }
-    #output_canvas, #webcam { transform: scaleX(-1); }
-    @keyframes pulse-fast {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.85; transform: scale(1.02); }
-    }
-    .animate-alert { animation: pulse-fast 1s infinite; }
+    .glow-good { box-shadow: 0 0 20px rgba(34, 197, 94, 0.25); }
+    .glow-warning { box-shadow: 0 0 20px rgba(234, 179, 8, 0.25); }
+    .glow-bad { box-shadow: 0 0 25px rgba(239, 68, 68, 0.4); }
   </style>
 </head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans">
 
-<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col items-center p-4 md:p-6 font-sans">
-
-  <header class="text-center max-w-2xl mb-4">
-    <h1 class="text-3xl font-extrabold text-indigo-400 tracking-tight sm:text-4xl">Focus Mirror & Posture AI</h1>
-    <p class="text-slate-400 text-sm mt-1">Lightweight AI Tracker with Background Alerts & Visual Guidance</p>
+  <!-- Navigation Bar -->
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <span class="text-2xl">🛡️</span>
+        <h1 class="font-bold text-lg tracking-tight bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
+          ErgoGuard AI
+        </h1>
+      </div>
+      <div class="flex items-center gap-3">
+        <button id="soundToggleBtn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-semibold transition flex items-center gap-2">
+          <span id="soundIcon">🔊</span>
+          <span id="soundText">Sound On</span>
+        </button>
+        <button id="recalibrateBtn" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition shadow-sm">
+          Recalibrate Posture
+        </button>
+      </div>
+    </div>
   </header>
 
-  <main class="w-full max-w-5xl flex flex-col items-center gap-6">
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-4 py-6 flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6 w-full">
 
-    <!-- Status Bar Badges -->
-    <div class="w-full flex flex-wrap justify-center items-center gap-4">
-      <div id="focus-badge" class="flex items-center gap-3 px-5 py-3 rounded-xl bg-slate-800 border border-slate-700 transition-all duration-300">
-        <span id="focus-icon" class="text-2xl">👁️</span>
-        <div class="flex flex-col">
-          <span class="text-xs text-slate-400 font-semibold uppercase tracking-wider">Screen Focus</span>
-          <span id="focus-text" class="text-base font-bold text-slate-200">Initializing...</span>
-        </div>
-      </div>
-
-      <div id="posture-badge" class="flex items-center gap-3 px-5 py-3 rounded-xl bg-slate-800 border border-slate-700 transition-all duration-300">
-        <span id="posture-icon" class="text-2xl">🧘</span>
-        <div class="flex flex-col">
-          <span class="text-xs text-slate-400 font-semibold uppercase tracking-wider">Posture Alignment</span>
-          <span id="posture-text" class="text-base font-bold text-slate-200">Initializing...</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Main View Grid -->
-    <div class="w-full grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+    <!-- Video & Camera Overlay Card -->
+    <div id="mirrorCard" class="lg:col-span-2 relative aspect-video rounded-2xl bg-slate-800 border-2 border-slate-700 overflow-hidden transition-all duration-300">
+      <video id="videoElement" class="hidden" playsinline></video>
+      <canvas id="canvasElement" class="w-full h-full object-cover transform -scale-x-100"></canvas>
       
-      <!-- Video Feed Frame -->
-      <div id="mirror-card" class="lg:col-span-2 relative aspect-video rounded-2xl bg-slate-800 border-2 border-slate-700 overflow-hidden transition-all duration-300">
-        <video id="webcam" class="hidden" playsinline></video>
-        <canvas id="output_canvas" class="w-full h-full object-cover"></canvas>
-        <video id="pip-video" autoplay muted class="hidden"></video>
+      <!-- Overlay Canvas Labels -->
+      <div class="absolute top-4 left-4 bg-slate-900/80 backdrop-blur px-3 py-1.5 rounded-lg border border-slate-700 text-xs font-medium flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        <span>Live Analysis</span>
+      </div>
+    </div>
 
-        <div id="loading-overlay" class="absolute inset-0 bg-slate-900/90 flex flex-col items-center justify-center gap-3 z-10">
-          <div class="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-          <p class="text-sm font-medium text-slate-300">Loading Optimized Models...</p>
+    <!-- Right Control Panel & Metrics -->
+    <div class="flex flex-col gap-4">
+
+      <!-- Focus State Card -->
+      <div class="bg-slate-800/60 rounded-2xl p-5 border border-slate-700/60 backdrop-blur">
+        <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Attention State</h2>
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <span id="focusIcon" class="text-2xl">👤</span>
+            <div>
+              <div id="focusText" class="text-base font-bold text-slate-400">Away</div>
+              <div id="focusSubtext" class="text-xs text-slate-400">Facing monitor center</div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- Live Animated Visualizer (Correct vs Current) -->
-      <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5 flex flex-col items-center text-center gap-4">
-        <h3 class="text-sm font-bold text-indigo-400 uppercase tracking-wider">Live Alignment Guide</h3>
+      <!-- Posture Status Card -->
+      <div class="bg-slate-800/60 rounded-2xl p-5 border border-slate-700/60 backdrop-blur">
+        <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Ergonomic Posture</h2>
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <span id="postureIcon" class="text-2xl">👤</span>
+            <div>
+              <div id="postureText" class="text-base font-bold text-slate-400">No Person Detected</div>
+              <div id="postureSubtext" class="text-xs text-slate-400">Spine and neck alignment</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Alignment Diagram -->
+      <div class="bg-slate-800/60 rounded-2xl p-5 border border-slate-700/60 backdrop-blur flex-1 flex flex-col justify-between">
+        <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Spine Alignment Preview</h2>
         
-        <div class="grid grid-cols-2 gap-4 w-full">
-          <!-- Ideal Figure -->
-          <div class="flex flex-col items-center bg-slate-900/60 p-3 rounded-xl border border-emerald-500/30">
-            <span class="text-xs font-semibold text-emerald-400 mb-2">Ideal Posture</span>
-            <svg class="w-16 h-24 stroke-emerald-400 fill-none stroke-2" viewBox="0 0 50 80">
-              <circle cx="25" cy="12" r="6" /> <!-- Head -->
-              <path d="M25 18 L25 50" /> <!-- Spine -->
-              <path d="M12 28 L38 28" /> <!-- Straight Shoulders -->
-              <circle cx="25" cy="12" r="2" class="fill-emerald-400" /> <!-- Ear point -->
-            </svg>
-            <span class="text-[10px] text-slate-400 mt-2">Spine Straight<br>Shoulders Open</span>
-          </div>
+        <div class="flex items-center justify-center my-4">
+          <svg id="liveSvg" class="w-24 h-24 stroke-slate-500 transition-all duration-300" viewBox="0 0 50 60" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <!-- Spine Vector Representation -->
+            <circle id="svgHead" cx="25" cy="12" r="6" />
+            <path id="svgShoulders" d="M12 28 L38 28" />
+            <path id="svgSpine" d="M25 18 L25 50" />
+          </svg>
+        </div>
 
-          <!-- Current Live Figure Status -->
-          <div id="live-viz-card" class="flex flex-col items-center bg-slate-900/60 p-3 rounded-xl border border-slate-700">
-            <span class="text-xs font-semibold text-slate-300 mb-2">Your Position</span>
-            <svg id="live-svg" class="w-16 h-24 stroke-slate-300 fill-none stroke-2 transition-all duration-300" viewBox="0 0 50 80">
-              <circle id="svg-head" cx="25" cy="12" r="6" />
-              <path id="svg-spine" d="M25 18 L25 50" />
-              <path id="svg-shoulders" d="M12 28 L38 28" />
-            </svg>
-            <span id="viz-status-text" class="text-[10px] text-slate-400 mt-2">Checking...</span>
-          </div>
+        <div class="text-center">
+          <div id="vizStatusText" class="text-[10px] text-slate-400 font-semibold">Waiting for user...</div>
         </div>
       </div>
 
     </div>
-
-    <!-- Controls -->
-    <div class="flex flex-wrap justify-center items-center gap-4">
-      <button id="pip-btn" class="px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 font-semibold text-sm transition-all shadow-md flex items-center gap-2">
-        <span>📌</span> Pop-out Floating Background Alert Widget
-      </button>
-
-      <button id="recalibrate-btn" class="px-5 py-2.5 rounded-lg bg-slate-700 hover:bg-slate-600 font-semibold text-sm transition-all shadow-md">
-        🎯 Recalibrate Neutral Posture
-      </button>
-    </div>
-
   </main>
 
+  <!-- Application Logic -->
   <script>
-    const videoElement = document.getElementById('webcam');
-    const canvasElement = document.getElementById('output_canvas');
+    const videoElement = document.getElementById('videoElement');
+    const canvasElement = document.getElementById('canvasElement');
     const canvasCtx = canvasElement.getContext('2d');
-    const pipVideo = document.getElementById('pip-video');
-    const pipBtn = document.getElementById('pip-btn');
-    const mirrorCard = document.getElementById('mirror-card');
 
-    const focusIcon = document.getElementById('focus-icon');
-    const focusText = document.getElementById('focus-text');
-    const postureIcon = document.getElementById('posture-icon');
-    const postureText = document.getElementById('posture-text');
-    const loadingOverlay = document.getElementById('loading-overlay');
-    const recalibrateBtn = document.getElementById('recalibrate-btn');
+    // UI Elements
+    const focusIcon = document.getElementById('focusIcon');
+    const focusText = document.getElementById('focusText');
+    const postureIcon = document.getElementById('postureIcon');
+    const postureText = document.getElementById('postureText');
+    const mirrorCard = document.getElementById('mirrorCard');
+    const recalibrateBtn = document.getElementById('recalibrateBtn');
+    const soundToggleBtn = document.getElementById('soundToggleBtn');
+    const soundIcon = document.getElementById('soundIcon');
+    const soundText = document.getElementById('soundText');
 
-    // SVG Visualizer Elements
-    const liveVizCard = document.getElementById('live-viz-card');
-    const liveSvg = document.getElementById('live-svg');
-    const svgHead = document.getElementById('svg-head');
-    const svgSpine = document.getElementById('svg-spine');
-    const svgShoulders = document.getElementById('svg-shoulders');
-    const vizStatusText = document.getElementById('viz-status-text');
+    const liveSvg = document.getElementById('liveSvg');
+    const svgHead = document.getElementById('svgHead');
+    const svgShoulders = document.getElementById('svgShoulders');
+    const svgSpine = document.getElementById('svgSpine');
+    const vizStatusText = document.getElementById('vizStatusText');
 
-    let rawPostureState = "GOOD";
-    let postureReason = "";
-    let rawFocusState = "OUT";
-
-    let lastExecutionTime = 0;
-    const TARGET_FPS = 15;
-    const FRAME_INTERVAL = 1000 / TARGET_FPS;
-
-    // Calibration Baselines
-    let baselineHeadDist = null;
-    let baselineShoulderWidth = null;
-    let baselineDepthZ = null;
+    // State Variables
+    let isHumanPresent = false;
+    let soundEnabled = true;
     let isCalibrated = false;
+    let baselineHeadDist = 0;
+    let baselineShoulderWidth = 0;
 
-    // Background Audio Synthesizer
-    function playAlertSound() {
+    let rawFocusState = "NO_HUMAN";
+    let rawPostureState = "NO_HUMAN";
+    let smoothedPostureState = "GOOD";
+    let postureReason = "Good Posture";
+
+    let currentNeckAngle = 0;
+    let currentTiltAngle = 0;
+
+    // Debounce & Audio Logic States
+    let postureBadStartTime = null;
+    let postureGoodStartTime = null;
+    let hasPlayedSoundForCurrentBadState = false;
+    const DEBOUNCE_DELAY_MS = 2000;
+
+    // Audio Alert Chime Synthesis
+    function playAlertChime() {
+      if (!soundEnabled) return;
       try {
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(440, audioCtx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(220, audioCtx.currentTime + 0.25);
-        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+        osc.frequency.setValueAtTime(440, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(220, ctx.currentTime + 0.3);
+
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+
         osc.connect(gain);
-        gain.connect(audioCtx.destination);
+        gain.connect(ctx.destination);
+
         osc.start();
-        osc.stop(audioCtx.currentTime + 0.25);
-      } catch (e) {}
+        osc.stop(ctx.currentTime + 0.3);
+      } catch (e) {
+        console.error("Audio playback error:", e);
+      }
     }
 
-    // PiP Background Canvas Setup
-    const stream = canvasElement.captureStream(15);
-    pipVideo.srcObject = stream;
-
-    pipBtn.addEventListener('click', async () => {
-      try {
-        await pipVideo.play();
-        if (document.pictureInPictureElement) {
-          await document.exitPictureInPicture();
-        } else {
-          await pipVideo.requestPictureInPicture();
-        }
-      } catch (err) {
-        alert("Picture-in-Picture error: " + err.message);
-      }
+    // Toggle Audio
+    soundToggleBtn.addEventListener('click', () => {
+      soundEnabled = !soundEnabled;
+      soundIcon.textContent = soundEnabled ? "🔊" : "🔇";
+      soundText.textContent = soundEnabled ? "Sound On" : "Sound Off";
     });
 
+    // Recalibrate Baseline
     recalibrateBtn.addEventListener('click', () => {
       isCalibrated = false;
-      postureText.textContent = "Recalibrating...";
     });
 
-    // Face Mesh (Optimized Options)
-    const faceMesh = new FaceMesh({ locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}` });
-    faceMesh.setOptions({ maxNumFaces: 2, refineLandmarks: false, minDetectionConfidence: 0.5 });
+    // MediaPipe Models Initialization
+    const faceMesh = new FaceMesh({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+    });
+    faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
 
-    // Pose Model (Optimized: Lite Complexity 0 for maximum CPU performance)
-    const pose = new Pose({ locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
-    pose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5 });
+    const pose = new Pose({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+    });
+    pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
 
+    // Face Mesh Callback (With Presence Detection)
     faceMesh.onResults(results => {
       if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) {
-        rawFocusState = "OUT";
+        rawFocusState = "NO_HUMAN";
+        isHumanPresent = false;
         return;
       }
-
-      // Filter: Lock exclusively onto the largest face in frame (Ignore secondary background people)
-      let primaryFace = results.multiFaceLandmarks[0];
-      let maxArea = 0;
-
-      for (const landmarks of results.multiFaceLandmarks) {
-        const width = Math.abs(landmarks[454].x - landmarks[234].x);
-        const height = Math.abs(landmarks[152].y - landmarks[10].y);
-        const area = width * height;
-        if (area > maxArea) {
-          maxArea = area;
-          primaryFace = landmarks;
-        }
-      }
-
-      const nose = primaryFace[1];
-      const lCheek = primaryFace[234];
-      const rCheek = primaryFace[454];
+      isHumanPresent = true;
+      const nose = results.multiFaceLandmarks[0][1];
+      const lCheek = results.multiFaceLandmarks[0][234];
+      const rCheek = results.multiFaceLandmarks[0][454];
       const yaw = Math.abs(nose.x - lCheek.x) / (Math.abs(nose.x - rCheek.x) + 0.0001);
       
       rawFocusState = (yaw < 0.35 || yaw > 2.85) ? "TURNING" : "IN";
     });
 
+    // Pose Callback (Guarded Behind Presence Check)
     pose.onResults(results => {
-      if (canvasElement.width !== videoElement.videoWidth) {
-        canvasElement.width = videoElement.videoWidth || 640;
-        canvasElement.height = videoElement.videoHeight || 480;
-      }
-
       canvasCtx.save();
       canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-
-      // Render camera image
       canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
 
-      if (results.poseLandmarks) {
+      if (results.poseLandmarks && isHumanPresent) {
         const lm = results.poseLandmarks;
         const leftEar = lm[7], rightEar = lm[8];
         const leftShoulder = lm[11], rightShoulder = lm[12];
         const nose = lm[0];
 
         if (leftShoulder && rightShoulder && nose && leftShoulder.visibility > 0.5) {
-          
+          const shoulderMidX = (leftShoulder.x + rightShoulder.x) / 2;
           const shoulderMidY = (leftShoulder.y + rightShoulder.y) / 2;
           const shoulderWidth = Math.hypot(leftShoulder.x - rightShoulder.x, leftShoulder.y - rightShoulder.y);
           
           const earMidY = (leftEar && rightEar) ? (leftEar.y + rightEar.y) / 2 : nose.y;
+          const earMidX = (leftEar && rightEar) ? (leftEar.x + rightEar.x) / 2 : nose.x;
+
           const headToShoulderDist = Math.abs(earMidY - shoulderMidY) / (shoulderWidth + 0.0001);
 
-          // Shoulder Depth Z (Convexity / Forward Rounding)
-          const avgShoulderZ = (leftShoulder.z + rightShoulder.z) / 2;
-          const relativeRoundingZ = nose.z - avgShoulderZ;
+          // Calculate Angles for Overlay
+          const dxNeck = (earMidX - shoulderMidX) * canvasElement.width;
+          const dyNeck = (shoulderMidY - earMidY) * canvasElement.height;
+          currentNeckAngle = Math.round(Math.abs(Math.atan2(dxNeck, dyNeck) * (180 / Math.PI)));
 
-          // Calibration baseline lock
+          const dyShoulder = Math.abs(rightShoulder.y - leftShoulder.y) * canvasElement.height;
+          const dxShoulder = Math.abs(rightShoulder.x - leftShoulder.x) * canvasElement.width;
+          currentTiltAngle = Math.round(Math.abs(Math.atan2(dyShoulder, dxShoulder) * (180 / Math.PI)));
+
+          // Auto-Calibration
           if (!isCalibrated) {
             baselineHeadDist = headToShoulderDist;
             baselineShoulderWidth = shoulderWidth;
-            baselineDepthZ = relativeRoundingZ;
             isCalibrated = true;
           }
 
-          // Ergonomic Deviations Thresholds
-          const isNeckBent = headToShoulderDist < (baselineHeadDist * 0.72); // Neck bent forward
-          const isLeaningTooClose = shoulderWidth > (baselineShoulderWidth * 1.28); // Body bent towards camera
-          const isShouldersRounded = relativeRoundingZ < (baselineDepthZ - 0.12); // Convex shoulders
+          // Tiered Deviation Evaluation
+          const headDropRatio = headToShoulderDist / baselineHeadDist;
+          const forwardLeanRatio = shoulderWidth / baselineShoulderWidth;
 
-          if (isNeckBent) {
+          if (headDropRatio < 0.70 || forwardLeanRatio > 1.30) {
             rawPostureState = "BAD";
-            postureReason = "Neck Bent Forward";
-          } else if (isLeaningTooClose) {
-            rawPostureState = "BAD";
-            postureReason = "Body Bent Forward";
-          } else if (isShouldersRounded) {
-            rawPostureState = "BAD";
-            postureReason = "Rounded / Convex Shoulders";
+            postureReason = "Severe Slouch / Forward Bend";
+          } else if (headDropRatio < 0.85 || forwardLeanRatio > 1.15 || currentTiltAngle > 8) {
+            rawPostureState = "SLIGHT";
+            postureReason = "Slight Posture Shift";
           } else {
             rawPostureState = "GOOD";
             postureReason = "Good Posture";
           }
+
+          drawOnCameraSkeleton(canvasCtx, { earMidX, earMidY, shoulderMidX, shoulderMidY, leftShoulder, rightShoulder }, rawPostureState);
         }
+      } else {
+        // Reset state when no human is detected
+        rawPostureState = "NO_HUMAN";
+        postureBadStartTime = null;
+        postureGoodStartTime = null;
+        hasPlayedSoundForCurrentBadState = false;
       }
 
-      // Draw background alert banner if user is viewing PiP overlay from another app
-      renderOverlayAlertsOnCanvas();
-
       canvasCtx.restore();
+      processPostureDebounce();
       updateUI();
-      loadingOverlay.classList.add('hidden');
     });
 
-    // Render Overlay Directly into Canvas for Floating PiP Pop-ups
-    function renderOverlayAlertsOnCanvas() {
-      if (rawPostureState === "BAD" || rawFocusState !== "IN") {
-        canvasCtx.fillStyle = "rgba(239, 68, 68, 0.88)";
-        canvasCtx.fillRect(0, 0, canvasElement.width, 70);
-        canvasCtx.fillStyle = "#ffffff";
-        canvasCtx.font = "bold 22px sans-serif";
-        canvasCtx.textAlign = "center";
-        
-        const alertMsg = rawPostureState === "BAD" ? `⚠️ POSTURE ALERT: ${postureReason}` : "👁️ FOCUS LOST: Look at Screen";
-        canvasCtx.fillText(alertMsg, canvasElement.width / 2, 43);
+    // Draw Skeleton & Metric Overlay on Canvas
+    function drawOnCameraSkeleton(ctx, pts, state) {
+      const w = canvasElement.width;
+      const h = canvasElement.height;
+
+      const color = state === "GOOD" ? "#22c55e" : (state === "SLIGHT" ? "#eab308" : "#ef4444");
+
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(pts.earMidX * w, pts.earMidY * h);
+      ctx.lineTo(pts.shoulderMidX * w, pts.shoulderMidY * h);
+      ctx.moveTo(pts.leftShoulder.x * w, pts.leftShoulder.y * h);
+      ctx.lineTo(pts.rightShoulder.x * w, pts.rightShoulder.y * h);
+      ctx.stroke();
+
+      // Mirror canvas context back to align text correctly
+      ctx.save();
+      ctx.scale(-1, 1);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 14px sans-serif";
+      ctx.fillText(`Neck Tilt: ${currentNeckAngle}°`, - (pts.shoulderMidX * w) + 15, (pts.shoulderMidY * h) - 10);
+      ctx.fillText(`Shoulder Tilt: ${currentTiltAngle}°`, - (pts.shoulderMidX * w) + 15, (pts.shoulderMidY * h) + 15);
+      ctx.restore();
+    }
+
+    // Debounce Logic & Chime Triggering
+    function processPostureDebounce() {
+      const now = Date.now();
+
+      if (rawPostureState === "BAD") {
+        postureGoodStartTime = null;
+        if (!postureBadStartTime) {
+          postureBadStartTime = now;
+        } else if (now - postureBadStartTime >= DEBOUNCE_DELAY_MS) {
+          if (smoothedPostureState !== "BAD") {
+            smoothedPostureState = "BAD";
+          }
+          if (!hasPlayedSoundForCurrentBadState) {
+            playAlertChime();
+            hasPlayedSoundForCurrentBadState = true;
+          }
+        }
+      } else if (rawPostureState === "SLIGHT") {
+        postureBadStartTime = null;
+        postureGoodStartTime = null;
+        smoothedPostureState = "SLIGHT";
+        hasPlayedSoundForCurrentBadState = false;
+      } else if (rawPostureState === "GOOD") {
+        postureBadStartTime = null;
+        if (!postureGoodStartTime) {
+          postureGoodStartTime = now;
+        } else if (now - postureGoodStartTime >= DEBOUNCE_DELAY_MS) {
+          smoothedPostureState = "GOOD";
+          hasPlayedSoundForCurrentBadState = false;
+        }
       }
     }
 
+    // Update UI Elements
     function updateUI() {
-      // Focus Status
-      if (rawFocusState === "IN") {
+      // Focus UI
+      if (rawFocusState === "NO_HUMAN") {
+        focusIcon.textContent = "👤";
+        focusText.textContent = "Away";
+        focusText.className = "text-base font-bold text-slate-400";
+      } else if (rawFocusState === "IN") {
         focusIcon.textContent = "👁️";
         focusText.textContent = "In Focus";
         focusText.className = "text-base font-bold text-green-400";
@@ -316,52 +358,65 @@
         focusText.className = "text-base font-bold text-amber-400";
       }
 
-      // Posture Status & Animated SVG Sync
-      if (rawPostureState === "GOOD") {
+      // Posture UI
+      if (rawPostureState === "NO_HUMAN") {
+        postureIcon.textContent = "👤";
+        postureText.textContent = "No Person Detected";
+        postureText.className = "text-base font-bold text-slate-400";
+        mirrorCard.className = "lg:col-span-2 relative aspect-video rounded-2xl bg-slate-800 border-2 border-slate-700 overflow-hidden transition-all duration-300";
+        
+        liveSvg.style.stroke = "#64748b";
+        vizStatusText.textContent = "Waiting for user...";
+        vizStatusText.className = "text-[10px] text-slate-400 mt-2 font-semibold";
+      } else if (smoothedPostureState === "GOOD") {
+        postureIcon.textContent = "🧘";
         postureText.textContent = "Good Posture";
         postureText.className = "text-base font-bold text-green-400";
         mirrorCard.className = "lg:col-span-2 relative aspect-video rounded-2xl bg-slate-800 border-2 border-slate-700 overflow-hidden transition-all duration-300 glow-good";
         
-        // Reset SVG Visualizer
         liveSvg.style.stroke = "#22c55e";
         svgSpine.setAttribute("d", "M25 18 L25 50");
         svgShoulders.setAttribute("d", "M12 28 L38 28");
         svgHead.setAttribute("cy", "12");
-        vizStatusText.textContent = "Perfect Alignment";
+        vizStatusText.textContent = "Aligned";
         vizStatusText.className = "text-[10px] text-green-400 mt-2 font-semibold";
-      } else {
+
+      } else if (smoothedPostureState === "SLIGHT") {
+        postureIcon.textContent = "⚠️";
+        postureText.textContent = "Slight Posture Shift";
+        postureText.className = "text-base font-bold text-amber-400";
+        mirrorCard.className = "lg:col-span-2 relative aspect-video rounded-2xl bg-slate-800 border-2 border-slate-700 overflow-hidden transition-all duration-300 glow-warning";
+
+        liveSvg.style.stroke = "#eab308";
+        vizStatusText.textContent = "Slight Shift";
+        vizStatusText.className = "text-[10px] text-amber-400 mt-2 font-semibold";
+
+      } else if (smoothedPostureState === "BAD") {
+        postureIcon.textContent = "🚨";
         postureText.textContent = postureReason;
         postureText.className = "text-base font-bold text-red-400";
-        mirrorCard.className = "lg:col-span-2 relative aspect-video rounded-2xl bg-slate-800 border-2 border-slate-700 overflow-hidden transition-all duration-300 glow-bad animate-alert";
-        playAlertSound();
+        mirrorCard.className = "lg:col-span-2 relative aspect-video rounded-2xl bg-slate-800 border-2 border-slate-700 overflow-hidden transition-all duration-300 glow-bad";
 
-        // Update SVG Visualizer based on error type
         liveSvg.style.stroke = "#ef4444";
-        if (postureReason.includes("Neck")) {
-          svgSpine.setAttribute("d", "M25 22 L25 50");
-          svgHead.setAttribute("cy", "16"); // Head dropped
-        } else if (postureReason.includes("Convex") || postureReason.includes("Body")) {
-          svgSpine.setAttribute("d", "M25 18 Q 33 34 25 50"); // Curved/slouched spine
-          svgShoulders.setAttribute("d", "M16 30 L34 30"); // Rounded inward shoulders
-        }
+        svgSpine.setAttribute("d", "M25 18 Q 33 34 25 50");
+        svgHead.setAttribute("cy", "16");
         vizStatusText.textContent = postureReason;
         vizStatusText.className = "text-[10px] text-red-400 mt-2 font-semibold";
       }
     }
 
-    // Throttle Frame Processing Loop (15 FPS target for high CPU efficiency)
+    // Camera Feed Setup
     const camera = new Camera(videoElement, {
       onFrame: async () => {
-        const now = performance.now();
-        if (now - lastExecutionTime >= FRAME_INTERVAL) {
-          lastExecutionTime = now;
-          await faceMesh.send({ image: videoElement });
-          await pose.send({ image: videoElement });
-        }
+        canvasElement.width = videoElement.videoWidth || 1280;
+        canvasElement.height = videoElement.videoHeight || 720;
+        await faceMesh.send({ image: videoElement });
+        await pose.send({ image: videoElement });
       },
-      width: 640,
-      height: 480
+      width: 1280,
+      height: 720
     });
+
     camera.start();
   </script>
 </body>
