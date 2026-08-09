@@ -201,10 +201,11 @@
           // 2. Craniovertebral Angle (CVA)
           const cvaDeg = Math.abs(Math.atan2(dyNeck, Math.abs(dxNeck)) * (180 / Math.PI));
 
-          // 3. Shoulder Lateral Tilt
-          const dyShoulder = (rightShoulder.y - leftShoulder.y) * canvasElement.height;
-          const dxShoulder = (rightShoulder.x - leftShoulder.x) * canvasElement.width;
-          const shoulderTiltDeg = Math.abs(Math.atan2(dyShoulder, dxShoulder) * (180 / Math.PI));
+          // 3. Shoulder Lateral Tilt (Normalized to account for clothing & perspective)
+          const rawShoulderTilt = Math.abs((rightShoulder.y - leftShoulder.y) * canvasElement.height);
+          const shoulderWidth = Math.hypot(leftShoulder.x - rightShoulder.x, leftShoulder.y - rightShoulder.y) * canvasElement.width;
+          const normalizedTilt = rawShoulderTilt / (shoulderWidth + 0.0001);
+          const shoulderTiltDeg = Math.abs(Math.atan2(rawShoulderTilt, shoulderWidth) * (180 / Math.PI));
 
           // Dashboard Updates
           metricNeck.textContent = `${Math.round(neckFlexionDeg)}°`;
@@ -215,7 +216,7 @@
           if (neckFlexionDeg > 18 || cvaDeg < 48) {
             rawPostureState = "BAD";
             postureReason = "Forward Head / Slouching";
-          } else if (shoulderTiltDeg > 6) {
+          } else if (normalizedTilt > 0.12) {
             rawPostureState = "BAD";
             postureReason = "Asymmetric Shoulder Tilt";
           } else {
