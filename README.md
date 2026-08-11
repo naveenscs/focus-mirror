@@ -22,7 +22,7 @@ Focus Mirror transforms real-time posture monitoring into an interactive visual 
 
 ## Technical Architecture
 
-- **Pose Detection:** `@mediapipe/pose` running locally via WebGPU/WebGL acceleration.
+- **Pose Detection:** `@mediapipe/pose` running locally via WASM/WebGL acceleration.
 - **Graphics Pipeline:** `Three.js` (WebGL particle system rendering at 60 FPS).
 - **Interface:** HTML5 / CSS3 with glassmorphic overlay controls.
 
